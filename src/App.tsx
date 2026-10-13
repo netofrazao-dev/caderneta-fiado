@@ -7,6 +7,7 @@ import Home from './pages/Home'
 import ClientePage from './pages/Cliente'
 import Lixeira from './pages/Lixeira'
 import Agenda from './pages/Agenda'
+import Configuracoes from './pages/Configuracoes'
 import NovaSenha from './pages/NovaSenha'
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
       <Route path="/cliente/:id" element={<ClientePage />} />
       <Route path="/lixeira" element={<Lixeira />} />
       <Route path="/agenda" element={<Agenda />} />
+      <Route path="/configuracoes" element={<Configuracoes />} />
     </Routes>
   )
 }

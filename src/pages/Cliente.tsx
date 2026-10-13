@@ -5,6 +5,8 @@ import type { Cliente, Lancamento } from '../types'
 import { brl, dataHora } from '../lib/format'
 import { situacao } from '../lib/vencimento'
 import type { Periodo } from '../lib/pdf'
+import { carregarPix } from '../lib/config'
+import { rotuloTipo, type PixConfig } from '../lib/pix'
 import Modal from '../components/Modal'
 import ClienteForm from '../components/ClienteForm'
 import LancamentoForm from '../components/LancamentoForm'
@@ -16,6 +18,7 @@ export default function ClientePage() {
   const [itens, setItens] = useState<Lancamento[]>([])
   const [modal, setModal] = useState<'compra' | 'pagamento' | 'editar' | 'item' | 'pdf' | null>(null)
   const [itemEdit, setItemEdit] = useState<Lancamento | null>(null)
+  const [pix, setPix] = useState<PixConfig | null>(null)
   const [msg, setMsg] = useState('')
   const [erro, setErro] = useState('')
 
@@ -41,6 +44,10 @@ export default function ClientePage() {
     import('../lib/pdf').then((m) => m.precarregarLogo())
   }, [])
 
+  useEffect(() => {
+    carregarPix().then(setPix)
+  }, [])
+
   const saldo = itens.reduce((s, l) => s + (l.tipo === 'compra' ? l.valor : -l.valor), 0)
   const deve = saldo > 0
 
@@ -49,12 +56,13 @@ export default function ClientePage() {
     setModal(null)
     setMsg('')
     const { compartilharPdf, gerarPdf } = await import('../lib/pdf')
-    const blob = await gerarPdf(cliente, itens, NOME_LOJA, periodo)
+    const blob = await gerarPdf(cliente, itens, NOME_LOJA, periodo, pix)
     const nome = `fiado-${cliente.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-')}.pdf`
+    const pixTxt = saldo > 0 && pix ? `\n\nPague por Pix (${rotuloTipo(pix.tipo)}): ${pix.chave}` : ''
     const texto =
-      saldo > 0
+      (saldo > 0
         ? `Olá, ${cliente.nome}! Segue o seu extrato de fiado. Total a pagar: ${brl(saldo)}. — ${NOME_LOJA}`
-        : `Olá, ${cliente.nome}! Segue o seu extrato de fiado. Não há nada pendente. — ${NOME_LOJA}`
+        : `Olá, ${cliente.nome}! Segue o seu extrato de fiado. Não há nada pendente. — ${NOME_LOJA}`) + pixTxt
     const r = await compartilharPdf(blob, nome, cliente.telefone, texto)
     if (r === 'baixado') setMsg('O PDF foi baixado. Anexe ele na conversa do WhatsApp que abriu.')
   }

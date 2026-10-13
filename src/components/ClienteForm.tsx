@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { lerValor, paraInputLocal } from '../lib/format'
 import type { Cliente } from '../types'
 
 export default function ClienteForm({ cliente, onSaved, onCancel }: { cliente?: Cliente; onSaved: () => void; onCancel: () => void }) {
@@ -7,6 +8,8 @@ export default function ClienteForm({ cliente, onSaved, onCancel }: { cliente?: 
   const [telefone, setTelefone] = useState(cliente?.telefone ?? '')
   const [obs, setObs] = useState(cliente?.observacao ?? '')
   const [dia, setDia] = useState(cliente?.dia_pagamento ? String(cliente.dia_pagamento) : '')
+  const [deve, setDeve] = useState('')
+  const [desde, setDesde] = useState(paraInputLocal(new Date()).slice(0, 10))
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -21,17 +24,50 @@ export default function ClienteForm({ cliente, onSaved, onCancel }: { cliente?: 
       setErro('O dia de pagar tem que ser de 1 a 31.')
       return
     }
+    let saldoInicial = 0
+    if (!cliente && deve.trim()) {
+      saldoInicial = lerValor(deve)
+      if (!saldoInicial || saldoInicial <= 0) {
+        setErro('Escreva quanto ele já deve no caderno. Ex.: 85,50')
+        return
+      }
+      if (!desde) {
+        setErro('Escolha a data aproximada do saldo do caderno.')
+        return
+      }
+    }
+
     setSalvando(true)
     setErro('')
     const dados = { nome: nome.trim(), telefone: telefone.trim() || null, observacao: obs.trim() || null, dia_pagamento: d }
-    const { error } = cliente
-      ? await supabase.from('clientes').update(dados).eq('id', cliente.id)
-      : await supabase.from('clientes').insert(dados)
-    setSalvando(false)
-    if (error) {
-      setErro('Não deu para salvar. Confira a internet e tente de novo.')
-      return
+
+    if (cliente) {
+      const { error } = await supabase.from('clientes').update(dados).eq('id', cliente.id)
+      setSalvando(false)
+      if (error) return setErro('Não deu para salvar. Confira a internet e tente de novo.')
+      return onSaved()
     }
+
+    const { data, error } = await supabase.from('clientes').insert(dados).select('id').single()
+    if (error || !data) {
+      setSalvando(false)
+      return setErro('Não deu para salvar. Confira a internet e tente de novo.')
+    }
+    if (saldoInicial > 0) {
+      const { error: e2 } = await supabase.from('lancamentos').insert({
+        cliente_id: data.id,
+        tipo: 'compra',
+        descricao: 'Saldo do caderno',
+        valor: saldoInicial,
+        data_hora: new Date(`${desde}T12:00:00`).toISOString(),
+      })
+      if (e2) {
+        await supabase.from('clientes').delete().eq('id', data.id)
+        setSalvando(false)
+        return setErro('Não deu para salvar. Confira a internet e tente de novo.')
+      }
+    }
+    setSalvando(false)
     onSaved()
   }
 
@@ -43,6 +79,18 @@ export default function ClienteForm({ cliente, onSaved, onCancel }: { cliente?: 
       <input value={telefone} onChange={(e) => setTelefone(e.target.value)} inputMode="tel" placeholder="Ex.: 91 99999-9999" />
       <label>Dia do mês em que ele acerta a conta (1 a 31)</label>
       <input value={dia} onChange={(e) => setDia(e.target.value)} inputMode="numeric" placeholder="Ex.: 15" />
+      {!cliente && (
+        <>
+          <label>Já deve quanto no caderno? (R$)</label>
+          <input value={deve} onChange={(e) => setDeve(e.target.value)} inputMode="decimal" placeholder="Deixe vazio se não deve nada" />
+          {deve.trim() && (
+            <>
+              <label>Desde quando, mais ou menos?</label>
+              <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+            </>
+          )}
+        </>
+      )}
       <label>Anotação (se quiser)</label>
       <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: mora perto da igreja" />
       {erro && <p className="erro">{erro}</p>}

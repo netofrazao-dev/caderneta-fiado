@@ -147,12 +147,17 @@ export default function Home() {
         })}
       </ul>
 
-      {!carregando && clientes.length > 0 && (
+      {!carregando && (
         <section className="copia">
+          {clientes.length > 0 && (
+            <>
           <p className="sub">Guarde uma cópia de todos os clientes e anotações em planilha, para ter segurança.</p>
           <button className="btn btn-claro" onClick={copia} disabled={baixando}>{baixando ? 'Preparando…' : 'Baixar cópia dos dados'}</button>
           {msg && <p className="aviso">{msg}</p>}
+            </>
+          )}
           <button className="link" onClick={() => nav('/lixeira')}>Lixeira (recuperar o que foi apagado)</button>
+          <button className="link" onClick={() => nav('/configuracoes')}>Configurar Pix para receber</button>
         </section>
       )}
 

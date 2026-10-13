@@ -1,7 +1,9 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import QRCode from 'qrcode'
 import type { Cliente, Lancamento } from '../types'
 import { brlPdf, dataHora, whatsNumero } from './format'
+import { pixPayload, rotuloTipo, type PixConfig } from './pix'
 
 export type Periodo = { tipo: 'tudo' } | { tipo: 'dias'; dias: number } | { tipo: 'pendente' }
 
@@ -37,7 +39,7 @@ export function precarregarLogo(): Promise<Logo> {
   return logoCache
 }
 
-export async function gerarPdf(cliente: Cliente, itens: Lancamento[], loja: string, periodo: Periodo): Promise<Blob> {
+export async function gerarPdf(cliente: Cliente, itens: Lancamento[], loja: string, periodo: Periodo, pix: PixConfig | null = null): Promise<Blob> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const logo = await precarregarLogo()
 
@@ -118,6 +120,24 @@ export async function gerarPdf(cliente: Cliente, itens: Lancamento[], loja: stri
   }
   doc.setFontSize(16)
   doc.text(saldoFinal > 0 ? `TOTAL A PAGAR: ${brlPdf(saldoFinal)}` : 'Nenhum valor pendente. Obrigado!', 14, y)
+
+  if (pix && saldoFinal > 0) {
+    const qr = await QRCode.toDataURL(pixPayload(pix), { margin: 1, width: 300 })
+    if (y + 52 > 285) {
+      doc.addPage()
+      y = 20
+    }
+    doc.setFontSize(12)
+    doc.text('Pague por Pix', 14, y + 10)
+    doc.addImage(qr, 'PNG', 14, y + 14, 38, 38)
+    doc.setFontSize(10)
+    doc.text(`Chave Pix (${rotuloTipo(pix.tipo)}):`, 58, y + 24)
+    doc.setFontSize(12)
+    doc.text(pix.chave, 58, y + 31)
+    doc.setFontSize(10)
+    doc.text(`Recebedor: ${pix.nome}`, 58, y + 38)
+    doc.text('Aponte a câmera do app do seu banco para o QR Code.', 58, y + 45)
+  }
 
   return doc.output('blob')
 }
